@@ -982,7 +982,10 @@ function renderDue() {
 renderDue();
 
 // voz: lê em frases curtas (o Chrome e o iOS cortam falas longas) e nunca trava se o evento de fim não vier
-const speakable = s => s.replace(/(\d{1,3})\.(\d{3})\/(\d{4})/g, '$1$2 de $3').replace(/\barts?\.\s?/gi, m => /^arts/i.test(m) ? 'artigos ' : 'artigo ').replace(/§§?/g, 'parágrafo').replace(/\bnº/g, 'número')
+const ROM = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12 };
+const SIGLAS = { LAI: 'Lei de Acesso à Informação', LGPD: 'éle gê pê dê', LINDB: 'Lei de Introdução às Normas do Direito Brasileiro', PAR: 'processo administrativo de responsabilização', PAD: 'processo administrativo disciplinar', IN: 'instrução normativa' };
+const speakable = s => s.replace(/\b(LAI|LGPD|LINDB|PAR|PAD|IN)\b/g, m => SIGLAS[m]).replace(/,\s([IVX]{1,4})\b(?=[,.;\s]|$)/g, (m, r) => ROM[r] ? `, inciso ${ROM[r]}` : m)
+  .replace(/(\d{1,3})\.(\d{3})\/(\d{4})/g, '$1$2 de $3').replace(/\barts?\.\s?/gi, m => /^arts/i.test(m) ? 'artigos ' : 'artigo ').replace(/§§?/g, 'parágrafo').replace(/\bnº/g, 'número')
   .replace(/\binc\./g, 'inciso').replace(/(\d)º/g, '$1').replace(/\be\.g\./g, 'por exemplo').replace(/[“”"]/g, '');
 let voice; const pickVoice = () => { const vs = speechSynthesis.getVoices().filter(v => /pt[-_]BR/i.test(v.lang));
   voice = vs.find(v => /Luciana|Francisca|Thalita|Natural|Google/i.test(v.name)) || vs[0] };
