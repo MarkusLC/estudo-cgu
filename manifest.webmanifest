@@ -1,0 +1,3 @@
+{ "name": "Estudo CGU", "short_name": "CGU", "start_url": "./", "scope": "./", "display": "standalone",
+  "background_color": "#000000", "theme_color": "#000000", "lang": "pt-BR",
+  "icons": [{ "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }] }
