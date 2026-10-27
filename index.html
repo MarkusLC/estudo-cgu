@@ -304,11 +304,14 @@ html { scroll-behavior: smooth }
       <label for="rsrc">Itens<select id="rsrc"><option value="mix">Parte legal + específicos</option><option value="L">Só parte legal (com justificativa)</option><option value="R">Só específicos reais do Cebraspe</option></select></label>
       <label for="rn">Quantidade<select id="rn"><option>10</option><option selected>20</option><option>40</option></select></label>
       <label for="rwait">Tempo para responder<select id="rwait"><option value="5">5 s</option><option value="8" selected>8 s</option><option value="12">12 s</option></select></label>
-      <label for="rrate">Voz<select id="rrate"><option value="1">normal</option><option value="1.15" selected>um pouco rápida</option><option value="1.3">rápida</option></select></label>
+      <label for="rvoz">Voz<select id="rvoz"></select></label>
+      <label for="rrate">Velocidade<select id="rrate"><option value="0.9">devagar</option><option value="1" selected>normal</option><option value="1.1">um pouco rápida</option><option value="1.25">rápida</option></select></label>
+      <button class="btn" id="rtest">Testar voz</button>
       <label id="rvoicel" hidden style="flex:0 0 auto;display:flex;flex-direction:row;gap:6px;align-items:center"><input type="checkbox" id="rvoice"> responder por voz</label>
       <button class="btn primary" id="rgo">Começar</button>
     </div>
     <p class="muted" style="font-size:.8125rem">Na esteira, deixe o app aberto: a tela fica acesa sozinha e a voz para se ela apagar. Itens que você deixar sem resposta não mudam a revisão.</p>
+    <p class="muted" id="vhint" hidden style="font-size:.8125rem"><b>Voz robótica?</b> Este aparelho só tem vozes básicas em português. No Mac: Ajustes do Sistema › Acessibilidade › Conteúdo Falado › Voz do Sistema › Gerenciar Vozes › Português (Brasil), baixe a Luciana ou a Fernanda na versão Premium ou Melhorada e recarregue a página. No iPhone: Ajustes › Acessibilidade › Conteúdo Falado › Vozes › Português (Brasil). No Edge, as vozes Natural da Microsoft já vêm prontas; no Android, use o Chrome com a voz do Google.</p>
   </section>
 
   <div class="runner" id="runner" hidden role="dialog" aria-modal="true" aria-label="Revisão em áudio">
@@ -1068,9 +1071,19 @@ const SIGLAS = { LAI: 'Lei de Acesso à Informação', LGPD: 'éle gê pê dê',
 const speakable = s => s.replace(/\b(LAI|LGPD|LINDB|PAR|PAD|IN)\b/g, m => SIGLAS[m]).replace(/,\s([IVX]{1,4})\b(?=[,.;\s]|$)/g, (m, r) => ROM[r] ? `, inciso ${ROM[r]}` : m)
   .replace(/(\d{1,3})\.(\d{3})\/(\d{4})/g, '$1$2 de $3').replace(/\barts?\.\s?/gi, m => /^arts/i.test(m) ? 'artigos ' : 'artigo ').replace(/§§?/g, 'parágrafo').replace(/\bnº/g, 'número')
   .replace(/\binc\./g, 'inciso').replace(/(\d)º/g, '$1').replace(/\be\.g\./g, 'por exemplo').replace(/[“”"]/g, '');
-let voice; const pickVoice = () => { const vs = speechSynthesis.getVoices().filter(v => /pt[-_]BR/i.test(v.lang));
-  voice = vs.find(v => /Luciana|Francisca|Thalita|Natural|Google/i.test(v.name)) || vs[0] };
+// escolhe a voz pt-BR mais natural instalada (neural/premium > melhorada > padrão; as vozes de efeito do macOS ficam por último) e lembra a escolha
+const vscore = v => /Natural|Neural|Online|Premium/i.test(v.name) ? 4 : /Enhanced|Aprimorad|Melhorad|Google/i.test(v.name) ? 3 : /Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley|Vovô|Vovó/i.test(v.name) ? 0 : 1;
+let voice, voices = [];
+const pickVoice = () => {
+  voices = speechSynthesis.getVoices().filter(v => /pt[-_]BR/i.test(v.lang)).sort((a, b) => vscore(b) - vscore(a) || a.name.localeCompare(b.name));
+  voice = voices.find(v => v.voiceURI === load('voz', '')) || voices[0];
+  $('#rvoz').innerHTML = voices.length ? voices.map(v => `<option value="${esc(v.voiceURI)}"${v === voice ? ' selected' : ''}>${esc(v.name)}</option>`).join('') : '<option>padrão do navegador</option>';
+  $('#vhint').hidden = !!voice && vscore(voices[0]) >= 3;
+};
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice }
+$('#rvoz').onchange = e => { voice = voices.find(v => v.voiceURI === e.target.value) || voice; save('voz', e.target.value) };
+$('#rrate').value = load('vrate', '1'); $('#rrate').onchange = e => save('vrate', e.target.value);
+$('#rtest').onclick = () => { try { speechSynthesis.cancel() } catch {} say('Julgue o item a seguir. A Lei 12.527/2011 garante o acesso à informação sem exigir o motivo do pedido.', gen) };
 function say(text, g) {
   const parts = speakable(text).split(/(?<=[.!?;:])\s+/).filter(s => s.trim()); // só quebra em pontuação seguida de espaço: "OAuth 2.0" e "12.813" ficam inteiros
   return parts.reduce((p, s) => p.then(() => g !== gen ? null : new Promise(res => {
