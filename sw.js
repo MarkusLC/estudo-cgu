@@ -5,11 +5,15 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (new URL(req.url).pathname.includes('/audio/')) return e.respondWith(audio(req));
+  // trechos curtos da esteira: guarda cada um na primeira vez que toca, para a revisão funcionar offline depois
+  if (new URL(req.url).pathname.includes('/voz/')) return e.respondWith(audio(req, 'cgu-voz', true));
   if (req.mode === 'navigate') e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(SHELL).then(s => s.put('./', c)); return r }).catch(() => caches.match('./')));
 });
-// Safari pede o áudio em pedaços (Range): responde 206 fatiando o arquivo salvo
-async function audio(req) {
-  const hit = await caches.open('cgu-audio').then(c => c.match(req.url));
+// Safari pede o áudio em pedaços (Range): responde 206 fatiando o arquivo salvo. store: baixa inteiro e guarda na primeira vez
+async function audio(req, cache = 'cgu-audio', store = false) {
+  const c = await caches.open(cache);
+  let hit = await c.match(req.url);
+  if (!hit && store) { const r = await fetch(req.url).catch(() => null); if (r?.ok) { await c.put(req.url, r.clone()); hit = r } }
   if (!hit) return fetch(req);
   const range = req.headers.get('range');
   if (!range) return hit;

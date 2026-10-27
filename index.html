@@ -907,7 +907,9 @@ const AUDIOS = [
   { f: 'audio/04-responsabilizacao.mp3', t: 'Responsabilização: PAD, PAR, leniência e improbidade', b: 'P2 · Direito', min: 16, d: 'Lei 8.112, Lei Anticorrupção e Lei de Improbidade depois de 2021, de indício a sanção.' },
   { f: 'audio/05-spring-security.mp3', t: 'Spring, Spring Security, OAuth 2.0 e OIDC', b: 'P3 · Arquitetura', min: 36, d: 'IoC, injeção de dependências, autoconfiguração, REST, JWT e proteção de endpoints e métodos.' },
   { f: 'audio/06-jpa-sql.mp3', t: 'JPA, Spring Data e SQL', b: 'P3 · Dados', min: 22, d: 'Ciclo de vida, contexto de persistência, LAZY × EAGER, N+1, transações, CTEs, índices e planos de execução.' },
-  { f: 'audio/07-arquitetura-ia.mp3', t: 'Arquitetura, mensageria e IA com RAG', b: 'P3 · Integração', min: 13, d: 'Microsserviços e eventos, idempotência, embeddings, busca vetorial, agentes e prompt injection.' }
+  { f: 'audio/07-arquitetura-ia.mp3', t: 'Arquitetura, mensageria e IA com RAG', b: 'P3 · Integração', min: 13, d: 'Microsserviços e eventos, idempotência, embeddings, busca vetorial, agentes e prompt injection.' },
+  { f: 'audio/08-discursiva-correcao.mp3', t: 'Discursiva: como o Cebraspe corrige', b: 'P4 · Discursiva', min: 17, d: 'Nota por quesito, desconto de português, estrutura da resposta e as 4 discursivas reais com o padrão oficial.' },
+  { f: 'audio/09-discursiva-treino.mp3', t: 'Discursiva: treino guiado dos temas prováveis', b: 'P4 · Discursiva', min: 14, d: 'Esqueleto de resposta, parágrafo por parágrafo, para os 3 temas prováveis e uma questão de 30 linhas.' }
 ];
 const pos = load('audpos', {}), heard = load('heard', {});
 let rate = load('rate', 1.25);
@@ -1076,14 +1078,27 @@ const vscore = v => /Natural|Neural|Online|Premium/i.test(v.name) ? 4 : /Enhance
 let voice, voices = [];
 const pickVoice = () => {
   voices = speechSynthesis.getVoices().filter(v => /pt[-_]BR/i.test(v.lang)).sort((a, b) => vscore(b) - vscore(a) || a.name.localeCompare(b.name));
-  voice = voices.find(v => v.voiceURI === load('voz', '')) || voices[0];
-  $('#rvoz').innerHTML = voices.length ? voices.map(v => `<option value="${esc(v.voiceURI)}"${v === voice ? ' selected' : ''}>${esc(v.name)}</option>`).join('') : '<option>padrão do navegador</option>';
-  $('#vhint').hidden = !!voice && vscore(voices[0]) >= 3;
+  const saved = load('voz', 'gravada'); voice = voices.find(v => v.voiceURI === saved) || voices[0];
+  $('#rvoz').innerHTML = '<option value="gravada">Narrador CGU (gravada)</option>' + voices.map(v => `<option value="${esc(v.voiceURI)}">${esc(v.name)}</option>`).join('');
+  $('#rvoz').value = saved === 'gravada' || voices.some(v => v.voiceURI === saved) ? saved : 'gravada'; vhint();
 };
-if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice }
-$('#rvoz').onchange = e => { voice = voices.find(v => v.voiceURI === e.target.value) || voice; save('voz', e.target.value) };
+const gravada = () => $('#rvoz').value === 'gravada';
+const vhint = () => { $('#vhint').hidden = gravada() || (!!voice && vscore(voices[0]) >= 3) };
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice } else $('#rvoz').innerHTML = '<option value="gravada">Narrador CGU (gravada)</option>';
+$('#rvoz').onchange = e => { if (!gravada()) voice = voices.find(v => v.voiceURI === e.target.value) || voice; save('voz', e.target.value); vhint() };
 $('#rrate').value = load('vrate', '1'); $('#rrate').onchange = e => save('vrate', e.target.value);
-$('#rtest').onclick = () => { try { speechSynthesis.cancel() } catch {} say('Julgue o item a seguir. A Lei 12.527/2011 garante o acesso à informação sem exigir o motivo do pedido.', gen) };
+$('#rtest').onclick = () => { try { speechSynthesis.cancel() } catch {} clipEl?.pause(); clip('L20-q', 'A informação classificada como secreta tem prazo máximo de restrição de acesso de quinze anos.', gen) };
+// trechos gravados no VoiceStudio (voz/<chave>.mp3); se o arquivo faltar ou falhar, o trecho sai na voz do navegador
+let clipEl = null;
+function clip(k, text, g) {
+  if (!gravada()) return say(text, g);
+  return new Promise(res => {
+    if (g !== gen) return res();
+    let fim = false; const fallback = () => { if (fim) return; fim = true; say(text, g).then(res) };
+    const a = clipEl = new Audio(`voz/${k}.mp3`); a.playbackRate = +$('#rrate').value;
+    a.onended = () => { fim = true; res() }; a.onerror = fallback; a.play().catch(fallback);
+  });
+}
 function say(text, g) {
   const parts = speakable(text).split(/(?<=[.!?;:])\s+/).filter(s => s.trim()); // só quebra em pontuação seguida de espaço: "OAuth 2.0" e "12.813" ficam inteiros
   return parts.reduce((p, s) => p.then(() => g !== gen ? null : new Promise(res => {
@@ -1123,16 +1138,18 @@ async function ask(g) {
   $('#rcmd').textContent = it.c || ''; $('#rtxt').textContent = it.t; $('#rver').textContent = ''; $('#rver').className = 'verdict';
   document.querySelectorAll('.ans button').forEach(b => b.disabled = false);
   const prev = run.list[run.i - 1];
-  if (it.c && (!prev || prev.c !== it.c)) await say(it.c.replace(/^julgue (os|o) (próximos? )?(itens?|item)( a seguir)?,?\s*/i, 'Itens '), g); // comando só quando muda
-  await say(it.t, g); if (g !== gen) return;
+  const cmd = it.c ? it.c.replace(/^julgue (os|o) (próximos? )?(itens?|item)( a seguir)?,?\s*/i, 'Itens ') : '';
+  if (gravada()) await clip(it.k + '-q', `${cmd} ${it.t}`, g); // o trecho gravado já traz o comando
+  else { if (it.c && (!prev || prev.c !== it.c)) await say(cmd, g); await say(it.t, g) } // comando só quando muda
+  if (g !== gen) return;
   const a = await waitAnswer(+$('#rwait').value, g); if (a === undefined || g !== gen) return;
   document.querySelectorAll('.ans button').forEach(b => b.disabled = true);
   const gab = it.g === 'C' ? 'Certo' : 'Errado', v = $('#rver');
   if (a) { const ok = a === it.g; beep(ok); srsMark(it.k, ok); run.ok += ok; run.err += !ok; run.answered = run.i;
     if (it.real) { ans[it.real.id] = { r: a, ok }; save('ans', ans); renderScore() }
     v.className = 'verdict ' + (ok ? 'ok' : 'bad'); v.innerHTML = `${ok ? 'Acertou' : 'Errou'}: o item está ${gab.toLowerCase()}.${it.j ? `<small>${esc(it.j)}</small>` : ''}`;
-    await say(`${ok ? 'Acertou' : 'Errou'}. O item está ${gab.toLowerCase()}. ${it.j || ''}`, g);
-  } else { v.className = 'verdict na'; v.innerHTML = `Sem resposta. Gabarito: ${gab.toLowerCase()}.${it.j ? `<small>${esc(it.j)}</small>` : ''}`; await say(`Gabarito: ${gab}. ${it.j || ''}`, g) }
+    await clip(ok ? 'acertou' : 'errou', ok ? 'Acertou.' : 'Errou.', g); await clip(it.k + '-a', `O item está ${gab.toLowerCase()}. ${it.j || ''}`, g);
+  } else { v.className = 'verdict na'; v.innerHTML = `Sem resposta. Gabarito: ${gab.toLowerCase()}.${it.j ? `<small>${esc(it.j)}</small>` : ''}`; await clip('semresp', 'Sem resposta.', g); await clip(it.k + '-a', `O item está ${gab.toLowerCase()}. ${it.j || ''}`, g) }
   if (g !== gen) return; await pause(900); if (g !== gen) return;
   run.i++; if (run.i < run.list.length) ask(g); else finish(g);
 }
@@ -1153,7 +1170,7 @@ $('#rgo').onclick = () => {
   $('#runner').hidden = false; document.body.style.overflow = 'hidden'; $('#rpause').disabled = $('#rskip').disabled = false; $('#rpause').textContent = 'Pausar';
   keepAwake(); beep(true); ask(++gen);
 };
-const halt = () => { gen++; answer?.(undefined); try { speechSynthesis.cancel() } catch {} };
+const halt = () => { gen++; answer?.(undefined); clipEl?.pause(); try { speechSynthesis.cancel() } catch {} };
 $('#runner').querySelector('.ans').onclick = e => { const b = e.target.closest('[data-a]'); if (b && !b.disabled) answer?.(b.dataset.a) };
 $('#rpause').onclick = () => { if ($('#rpause').textContent === 'Pausar') { halt(); $('#rpause').textContent = 'Continuar' } else { $('#rpause').textContent = 'Pausar';
   if (run.answered === run.i) run.i++; run.i < run.list.length ? ask(++gen) : finish(++gen) } }; // pausou depois de responder: segue para o próximo, sem contar o item duas vezes
